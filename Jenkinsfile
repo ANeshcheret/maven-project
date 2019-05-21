@@ -1,6 +1,16 @@
 pipeline {
     agent any
-    stages{
+    
+    parameters { 
+         string(name: 'tomcat_dev', defaultValue: '54.175.61.114', description: 'Staging Server')
+         string(name: 'tomcat_prod', defaultValue: '3.93.237.237', description: 'Production Server')
+    } 
+
+    triggers {
+         pollSCM('* * * * *') // Polling Source Control
+     }
+
+stages{
         stage('Build'){
             steps {
                 sh '/var/lib/jenkins/apache-maven-3.6.1/bin/mvn clean package'
@@ -12,31 +22,21 @@ pipeline {
                 }
             }
         }
-	stage ('Deploy to staging'){
-            steps {
-                build job: 'Deploy-to-staging'
-	    }	
-	}
 
-        stage ('Deploy to Production'){
-            steps{
-                timeout(time:5, unit:'DAYS'){
-                    input message:'Approve PRODUCTION Deployment?'
+        stage ('Deployments'){
+            parallel{
+                stage ('Deploy to Staging'){
+                    steps {
+                        sh "scp -i /home/jenkins/tomcat-demo.pem **/target/*.war ec2-user@${params.tomcat_dev}:/var/lib/tomcat8/webapps"
+                    }
                 }
 
-                build job: 'Deploy-to-Prod'
-            }
-            post {
-                success {
-                    echo 'Code deployed to Production.'
-                }
-
-                failure {
-                    echo ' Deployment failed.'
+                stage ("Deploy to Production"){
+                    steps {
+                        sh "scp -i /home/jenkins/tomcat-demo.pem **/target/*.war ec2-user@${params.tomcat_prod}:/var/lib/tomcat8/webapps"
+                    }
                 }
             }
         }
-
-
     }
 }
